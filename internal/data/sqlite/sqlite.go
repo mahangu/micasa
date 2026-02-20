@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/callbacks"
@@ -96,6 +97,15 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 		dialector.DriverName = DriverName
 	}
 
+	// Use the sqlite time format so that time values roundtrip reliably.
+	// Go's default time.String() can produce timezone representations
+	// (e.g. "+0530 +0530") that the driver cannot parse back.
+	sep := "?"
+	if strings.ContainsRune(dialector.DSN, '?') {
+		sep = "&"
+	}
+	dsn := dialector.DSN + sep + "_time_format=sqlite"
+
 	if dialector.Conn != nil {
 		db.ConnPool = dialector.Conn
 	} else if len(dialector.Pragmas) > 0 {
@@ -110,12 +120,12 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 			return err
 		}
 		db.ConnPool = sql.OpenDB(&pragmaConnector{
-			dsn:     dialector.DSN,
+			dsn:     dsn,
 			driver:  drv,
 			pragmas: dialector.Pragmas,
 		})
 	} else {
-		conn, err := sql.Open(dialector.DriverName, dialector.DSN)
+		conn, err := sql.Open(dialector.DriverName, dsn)
 		if err != nil {
 			return err
 		}
